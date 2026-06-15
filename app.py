@@ -2,98 +2,134 @@ from flask import Flask, render_template, request
 import pandas as pd
 import matplotlib
 
-matplotlib.use('Agg')
-
+matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import io
 import base64
 
 app = Flask(__name__)
 
+
 @app.route("/", methods=["GET", "POST"])
 def home():
+
+    expenses = []
+    total = 0
+    average = 0
+    highest_category = ""
+    insight = ""
 
     pie_chart = None
     bar_chart = None
 
-    total = 0
-    average = 0
-    highest_category = ""
-
     if request.method == "POST":
 
-        food = float(request.form["food"])
-        travel = float(request.form["travel"])
-        shopping = float(request.form["shopping"])
-        others = float(request.form["others"])
+        categories = request.form.getlist("category")
+        amounts = request.form.getlist("amount")
 
-        data = {
-            "Category": ["Food", "Travel", "Shopping", "others"],
-            "Amount": [food, travel, shopping, others]
-        }
+        data = []
 
-        df = pd.DataFrame(data)
+        for category, amount in zip(categories, amounts):
 
-        total = df["Amount"].sum()
-        average = round(df["Amount"].mean(), 2)
+            if category.strip() and amount.strip():
 
-        highest_category = df.loc[
-            df["Amount"].idxmax(),
-            "Category"
-        ]
+                data.append({
+                    "Category": category,
+                    "Amount": float(amount)
+                })
 
-        # PIE CHART
-        plt.figure(figsize=(5, 5))
+        if data:
 
-        plt.pie(
-            df["Amount"],
-            labels=df["Category"],
-            autopct="%1.1f%%"
-        )
+            df = pd.DataFrame(data)
 
-        plt.title("Expense Distribution")
+            expenses = data
 
-        buffer = io.BytesIO()
+            total = round(df["Amount"].sum(), 2)
 
-        plt.savefig(buffer, format="png")
-        buffer.seek(0)
+            average = round(df["Amount"].mean(), 2)
 
-        pie_chart = base64.b64encode(
-            buffer.getvalue()
-        ).decode()
+            highest_category = df.loc[
+                df["Amount"].idxmax(),
+                "Category"
+            ]
 
-        plt.close()
+            highest_amount = df["Amount"].max()
 
-        # BAR CHART
-        plt.figure(figsize=(6, 4))
+            percentage = round(
+                (highest_amount / total) * 100,
+                2
+            )
 
-        plt.bar(
-            df["Category"],
-            df["Amount"]
-        )
+            insight = (
+                f"{highest_category} accounts for "
+                f"{percentage}% of total spending."
+            )
 
-        plt.title("Expense Comparison")
-        plt.ylabel("Amount")
+            # Pie Chart
+            plt.figure(figsize=(5, 5))
 
-        buffer = io.BytesIO()
+            plt.pie(
+                df["Amount"],
+                labels=df["Category"],
+                autopct="%1.1f%%"
+            )
 
-        plt.savefig(buffer, format="png")
-        buffer.seek(0)
+            plt.title("Expense Distribution")
 
-        bar_chart = base64.b64encode(
-            buffer.getvalue()
-        ).decode()
+            buffer = io.BytesIO()
 
-        plt.close()
+            plt.savefig(
+                buffer,
+                format="png",
+                bbox_inches="tight"
+            )
+
+            buffer.seek(0)
+
+            pie_chart = base64.b64encode(
+                buffer.getvalue()
+            ).decode()
+
+            plt.close()
+
+            # Bar Chart
+            plt.figure(figsize=(6, 4))
+
+            plt.bar(
+                df["Category"],
+                df["Amount"]
+            )
+
+            plt.title("Expense Comparison")
+            plt.ylabel("Amount")
+
+            buffer = io.BytesIO()
+
+            plt.savefig(
+                buffer,
+                format="png",
+                bbox_inches="tight"
+            )
+
+            buffer.seek(0)
+
+            bar_chart = base64.b64encode(
+                buffer.getvalue()
+            ).decode()
+
+            plt.close()
 
     return render_template(
         "index.html",
-        pie_chart=pie_chart,
-        bar_chart=bar_chart,
+        expenses=expenses,
         total=total,
         average=average,
-        highest_category=highest_category
+        highest_category=highest_category,
+        insight=insight,
+        pie_chart=pie_chart,
+        bar_chart=bar_chart
     )
+
 
 if __name__ == "__main__":
     app.run(debug=True)
